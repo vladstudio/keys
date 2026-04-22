@@ -50,8 +50,8 @@ class ConfigManager {
         pollTimer = nil
     }
 
-    func openFolder() {
-        let url = URL(fileURLWithPath: configPath).deletingLastPathComponent()
+    func openFile() {
+        let url = URL(fileURLWithPath: configPath)
         NSWorkspace.shared.open(url)
     }
 

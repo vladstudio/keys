@@ -7,6 +7,12 @@ class SnippetPicker: NSPanel, NSTextFieldDelegate, NSTableViewDataSource, NSTabl
     private var filtered = [Snippet]()
     private var prevApp: NSRunningApplication?
 
+    private static let lastSearchKey = "SnippetPicker.lastSearch"
+    private var lastSearch: String {
+        get { UserDefaults.standard.string(forKey: Self.lastSearchKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Self.lastSearchKey) }
+    }
+
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
                    styleMask: [.titled, .closable, .fullSizeContentView, .utilityWindow],
@@ -69,11 +75,12 @@ class SnippetPicker: NSPanel, NSTextFieldDelegate, NSTableViewDataSource, NSTabl
     func show(snippets: [Snippet]) {
         all = snippets
         prevApp = NSWorkspace.shared.frontmostApplication
-        search.stringValue = ""
+        search.stringValue = lastSearch
         refilter()
         center()
         makeKeyAndOrderFront(nil)
         makeFirstResponder(search)
+        if !lastSearch.isEmpty { search.currentEditor()?.selectAll(nil) }
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -142,6 +149,7 @@ class SnippetPicker: NSPanel, NSTextFieldDelegate, NSTableViewDataSource, NSTabl
     }
 
     private func dismiss() {
+        lastSearch = search.stringValue
         orderOut(nil)
         prevApp?.activate()
     }
@@ -157,7 +165,10 @@ class SnippetPicker: NSPanel, NSTextFieldDelegate, NSTableViewDataSource, NSTabl
 
     // MARK: - NSTextFieldDelegate
 
-    func controlTextDidChange(_ n: Notification) { refilter() }
+    func controlTextDidChange(_ n: Notification) {
+        lastSearch = search.stringValue
+        refilter()
+    }
 
     func control(_ control: NSControl, textView: NSTextView,
                  doCommandBy sel: Selector) -> Bool {
