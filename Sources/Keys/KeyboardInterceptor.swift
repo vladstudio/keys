@@ -4,6 +4,8 @@ import Foundation
 import IOKit.hid
 
 class KeyboardInterceptor {
+    private static let mediaKeySourceMaxAge: CFTimeInterval = 0.25
+
     private let remapEngine = RemapEngine()
     var isEnabled = true
     var snippetPicker: SnippetPicker?
@@ -13,7 +15,7 @@ class KeyboardInterceptor {
     private var runLoopSource: CFRunLoopSource?
     private var internalKeyboardTypes = Set<Int64>()
     private var mediaKeyMonitor: IOHIDManager?
-    fileprivate var lastMediaKeyIsInternal: Bool?
+    fileprivate var lastMediaKeySource: (isInternal: Bool, time: CFTimeInterval)?
     var keystrokeOverlay: KeystrokeOverlay?
     var onPermissionLost: (() -> Void)?
 
@@ -68,7 +70,7 @@ class KeyboardInterceptor {
     var onWarning: ((String) -> Void)?
 
     func update(config: Config) {
-        internalKeyboardTypes = Self.detectInternalKeyboardTypes()
+        refreshDeviceState()
 
         var hidMappings: [(src: UInt16, dst: UInt16)] = []
         var tapRules: [RemapRule] = []
@@ -119,10 +121,13 @@ class KeyboardInterceptor {
             "DeviceUsage": 1,        // Consumer Control
         ] as CFDictionary)
         let ctx = Unmanaged.passUnretained(self).toOpaque()
+        IOHIDManagerRegisterDeviceMatchingCallback(manager, mediaKeyDeviceCallback, ctx)
+        IOHIDManagerRegisterDeviceRemovalCallback(manager, mediaKeyDeviceCallback, ctx)
         IOHIDManagerRegisterInputValueCallback(manager, mediaKeyHIDCallback, ctx)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         _ = IOHIDManagerOpen(manager, 0)
         mediaKeyMonitor = manager
+        refreshDeviceState()
     }
 
     // MARK: - Event handling
@@ -154,7 +159,7 @@ class KeyboardInterceptor {
             let keyType = Int32((data1 >> 16) & 0xFFFF)
             let isDown = ((data1 >> 8) & 0xFF) == 0x0A
             // NX_SYSDEFINED events don't carry keyboard type — use IOHIDManager-tracked device info
-            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown, isInternal: lastMediaKeyIsInternal), pass: pass)
+            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown, isInternal: currentMediaKeyIsInternal()), pass: pass)
         }
 
         if event.getIntegerValueField(.eventSourceUserData) == EventEmitter.marker {
@@ -195,6 +200,25 @@ class KeyboardInterceptor {
             result.insert(type.int64Value)
         }
         return result
+    }
+
+    fileprivate func refreshDeviceState() {
+        internalKeyboardTypes = Self.detectInternalKeyboardTypes()
+        lastMediaKeySource = nil
+    }
+
+    fileprivate func noteMediaKeySource(from device: IOHIDDevice) {
+        let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
+        lastMediaKeySource = ((builtIn as? NSNumber)?.boolValue ?? false, CFAbsoluteTimeGetCurrent())
+    }
+
+    private func currentMediaKeyIsInternal() -> Bool? {
+        guard let source = lastMediaKeySource else { return nil }
+        guard CFAbsoluteTimeGetCurrent() - source.time <= Self.mediaKeySourceMaxAge else {
+            lastMediaKeySource = nil
+            return nil
+        }
+        return source.isInternal
     }
 
     private func dispatch(_ result: RemapEngine.Result, pass: Unmanaged<CGEvent>) -> Unmanaged<CGEvent>? {
@@ -240,8 +264,18 @@ private func mediaKeyHIDCallback(
     guard let context, let sender else { return }
     let interceptor = Unmanaged<KeyboardInterceptor>.fromOpaque(context).takeUnretainedValue()
     let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
-    let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
-    interceptor.lastMediaKeyIsInternal = (builtIn as? NSNumber)?.boolValue ?? false
+    interceptor.noteMediaKeySource(from: device)
+}
+
+private func mediaKeyDeviceCallback(
+    context: UnsafeMutableRawPointer?,
+    result: IOReturn,
+    sender: UnsafeMutableRawPointer?,
+    device: IOHIDDevice
+) {
+    guard let context else { return }
+    let interceptor = Unmanaged<KeyboardInterceptor>.fromOpaque(context).takeUnretainedValue()
+    interceptor.refreshDeviceState()
 }
 
 private func tapCallback(
