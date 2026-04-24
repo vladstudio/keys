@@ -5,6 +5,13 @@ import IOKit.hid
 
 class KeyboardInterceptor {
     private static let mediaKeySourceMaxAge: CFTimeInterval = 0.25
+    private static let mediaUsageToKeyType: [UInt32: Int32] = [
+        0x0007_003A: 3, 0x0007_003B: 2,  0x0007_003E: 22, 0x0007_003F: 21,
+        0x0007_0040: 18, 0x0007_0041: 16, 0x0007_0042: 17,
+        0x0007_0043: 7,  0x0007_0044: 1,  0x0007_0045: 0,
+        0x000C_006F: 2,  0x000C_0070: 3,  0x000C_00B5: 17, 0x000C_00B6: 18,
+        0x000C_00CD: 16, 0x000C_00E2: 7,  0x000C_00E9: 0,  0x000C_00EA: 1,
+    ]
 
     private let remapEngine = RemapEngine()
     var isEnabled = true
@@ -15,7 +22,7 @@ class KeyboardInterceptor {
     private var runLoopSource: CFRunLoopSource?
     private var internalKeyboardTypes = Set<Int64>()
     private var mediaKeyMonitor: IOHIDManager?
-    fileprivate var lastMediaKeySource: (isInternal: Bool, time: CFTimeInterval)?
+    fileprivate var lastMediaKeySource: (keyType: Int32, isInternal: Bool, time: CFTimeInterval)?
     var keystrokeOverlay: KeystrokeOverlay?
     var onPermissionLost: (() -> Void)?
 
@@ -159,7 +166,7 @@ class KeyboardInterceptor {
             let keyType = Int32((data1 >> 16) & 0xFFFF)
             let isDown = ((data1 >> 8) & 0xFF) == 0x0A
             // NX_SYSDEFINED events don't carry keyboard type — use IOHIDManager-tracked device info
-            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown, isInternal: currentMediaKeyIsInternal()), pass: pass)
+            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown, isInternal: currentMediaKeyIsInternal(keyType: keyType)), pass: pass)
         }
 
         if event.getIntegerValueField(.eventSourceUserData) == EventEmitter.marker {
@@ -207,13 +214,19 @@ class KeyboardInterceptor {
         lastMediaKeySource = nil
     }
 
-    fileprivate func noteMediaKeySource(from device: IOHIDDevice) {
-        let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
-        lastMediaKeySource = ((builtIn as? NSNumber)?.boolValue ?? false, CFAbsoluteTimeGetCurrent())
+    fileprivate static func mediaKeyType(for element: IOHIDElement) -> Int32? {
+        let key = (IOHIDElementGetUsagePage(element) << 16) | IOHIDElementGetUsage(element)
+        return mediaUsageToKeyType[key]
     }
 
-    private func currentMediaKeyIsInternal() -> Bool? {
+    fileprivate func noteMediaKeySource(from device: IOHIDDevice, keyType: Int32) {
+        let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
+        lastMediaKeySource = (keyType, (builtIn as? NSNumber)?.boolValue ?? false, CFAbsoluteTimeGetCurrent())
+    }
+
+    private func currentMediaKeyIsInternal(keyType: Int32) -> Bool? {
         guard let source = lastMediaKeySource else { return nil }
+        guard source.keyType == keyType else { return nil }
         guard CFAbsoluteTimeGetCurrent() - source.time <= Self.mediaKeySourceMaxAge else {
             lastMediaKeySource = nil
             return nil
@@ -264,7 +277,8 @@ private func mediaKeyHIDCallback(
     guard let context, let sender else { return }
     let interceptor = Unmanaged<KeyboardInterceptor>.fromOpaque(context).takeUnretainedValue()
     let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
-    interceptor.noteMediaKeySource(from: device)
+    guard let keyType = KeyboardInterceptor.mediaKeyType(for: IOHIDValueGetElement(value)) else { return }
+    interceptor.noteMediaKeySource(from: device, keyType: keyType)
 }
 
 private func mediaKeyDeviceCallback(
