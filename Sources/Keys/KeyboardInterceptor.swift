@@ -242,7 +242,7 @@ class KeyboardInterceptor {
             DispatchQueue.main.async {
                 switch output {
                 case .showPicker:
-                    self.snippetPicker?.show(snippets: self.snippets)
+                    self.snippetPicker?.show(items: self.snippets)
                 case .toggleInput:
                     InputSourceManager.toggle()
                 case .openApp(let name):
