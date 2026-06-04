@@ -29,6 +29,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         interceptor.onWarning = { [weak self] msg in self?.configDidFail(msg) }
         interceptor.onPermissionLost = { [weak self] in self?.promptPermissions() }
 
+        snippetPicker.onOpenConfig = { [weak self] in self?.openConfig() }
+
         keystrokeOverlay.isOverlayEnabled = UserDefaults.standard.bool(forKey: Defaults.keystrokeOverlay)
         if let pos = KeystrokeOverlay.Position(rawValue: UserDefaults.standard.integer(forKey: Defaults.keystrokeOverlayPosition)) {
             keystrokeOverlay.position = pos
@@ -65,7 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let edit = NSMenuItem(
-            title: "Open Config", action: #selector(openConfig), keyEquivalent: "")
+            title: "Open Config", action: #selector(openConfig), keyEquivalent: ",")
         edit.target = self
         menu.addItem(edit)
 

@@ -16,6 +16,8 @@ extension Snippet: Pickable {
 final class SnippetPicker: PickerPanel<Snippet> {
     private static let keywordBonus = 10_000
 
+    var onOpenConfig: (() -> Void)?
+
     init() {
         super.init(title: "Snippets", placeholder: "Search snippets…",
                    searchKey: "SnippetPicker.lastSearch",
@@ -31,6 +33,19 @@ final class SnippetPicker: PickerPanel<Snippet> {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let commandOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+        if event.type == .keyDown,
+           commandOnly,
+           event.charactersIgnoringModifiers == ",",
+           let onOpenConfig {
+            dismiss()
+            onOpenConfig()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     // MARK: - Fuzzy filter with keyword bonus
 
