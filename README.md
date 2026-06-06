@@ -6,6 +6,8 @@ A macOS menu bar app that remaps keys and pastes text snippets.
 
 <img src="web/screenshot.webp" alt="Screenshot">
 
+<video src="web/show-keystrokes.mp4" width="800" autoplay loop muted playsinline></video>
+
 - **Key remapping** — single keys, modifier combos, double-tap sequences
 - **Input source toggle** — cycle keyboard languages with a single key (e.g. caps lock)
 - **Snippet picker** — trigger a floating picker with a keystroke, filter and paste
