@@ -22,21 +22,15 @@ A small macOS menu bar app that lets you make keys do more — change what a key
 
 ## Install
 
+1. Open **Terminal** (press ⌘Space, type "Terminal", press Enter)
+2. Copy and paste this command, then press Enter:
+
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vladstudio/keys/main/install.sh)"
 ```
 
-On first launch, macOS will ask you to grant **Accessibility** and **Input Monitoring** access in System Settings. Keys needs these to see your keystrokes. This is normal and safe — the data never leaves your Mac.
-
-<details>
-<summary>What does the install script do?</summary>
-
-- Downloads the latest release from GitHub
-- Installs to /Applications (replaces any existing version)
-- Removes the quarantine flag so the unsigned app can run
-- Opens the app
-
-</details>
+3. The app will install to /Applications and open automatically
+4. On first launch, macOS will ask you to grant **Accessibility** and **Input Monitoring** access in System Settings — these are required for Keys to see your keystrokes
 
 ## Configuration
 

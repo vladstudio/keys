@@ -301,10 +301,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: ConfigManagerDelegate {
     func configDidUpdate(_ config: Config) {
-        interceptor.update(config: config)
-        if let item = errorItem {
-            statusItem.menu?.removeItem(item)
-            errorItem = nil
+        var warnings = config.warnings
+        warnings += interceptor.update(config: config)
+
+        if warnings.isEmpty {
+            if let item = errorItem {
+                statusItem.menu?.removeItem(item)
+                errorItem = nil
+            }
+        } else {
+            configDidFail(warnings.joined(separator: "; "))
         }
         updateIcon()
     }

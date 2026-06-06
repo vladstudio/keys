@@ -37,4 +37,6 @@ struct Snippet {
 struct Config {
     var remaps: [RemapRule] = []
     var snippets: [Snippet] = []
+    /// Non-fatal parse issues (unknown sections/keys, malformed lines); shown in the menu.
+    var warnings: [String] = []
 }

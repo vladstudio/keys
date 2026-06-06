@@ -62,10 +62,12 @@ class KeyboardInterceptor {
 
     var onWarning: ((String) -> Void)?
 
-    func update(config: Config) {
+    func update(config: Config) -> [String] {
+        var warnings: [String] = []
         var hidMappings: [(src: UInt16, dst: UInt16)] = []
         var tapRules: [RemapRule] = []
         var capsLockSeen = false
+        var mediaKeysSeen = Set<Int32>()
 
         for rule in config.remaps {
             let isCapsLock: Bool
@@ -76,10 +78,18 @@ class KeyboardInterceptor {
             }
 
             if isCapsLock && capsLockSeen {
-                onWarning?("Multiple caps_lock rules; using first, ignoring rest")
+                warnings.append("Multiple caps_lock rules; using first, ignoring rest")
                 continue
             }
             if isCapsLock { capsLockSeen = true }
+
+            if case .mediaKey(let keyType) = rule.input {
+                if mediaKeysSeen.contains(keyType) {
+                    warnings.append("Multiple rules for media key; using first, ignoring rest")
+                    continue
+                }
+                mediaKeysSeen.insert(keyType)
+            }
 
             if isCapsLock,
                case .key(let combo) = rule.output,
@@ -94,6 +104,7 @@ class KeyboardInterceptor {
         remapEngine.update(rules: tapRules)
         snippets = config.snippets
         HIDManager.apply(mappings: hidMappings)
+        return warnings
     }
 
     // MARK: - Event handling
