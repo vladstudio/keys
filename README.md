@@ -4,6 +4,8 @@
 
 A macOS menu bar app that remaps keys and pastes text snippets.
 
+<img src="web/screenshot.webp" alt="Screenshot">
+
 - **Key remapping** — single keys, modifier combos, double-tap sequences
 - **Input source toggle** — cycle keyboard languages with a single key (e.g. caps lock)
 - **Snippet picker** — trigger a floating picker with a keystroke, filter and paste
@@ -80,6 +82,6 @@ When the snippet picker opens, type to filter, use arrow keys to navigate, Enter
 
 **Media keys** (input only): `brightness_up`, `brightness_down`, `volume_up`, `volume_down`, `mute`, `play`, `next`, `previous`, `illumination_up`, `illumination_down`.
 
-## License
+---
 
-MIT
+License: MIT
