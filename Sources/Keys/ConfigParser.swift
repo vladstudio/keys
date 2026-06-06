@@ -22,7 +22,6 @@ enum ConfigParser {
     static func parse(_ content: String) throws -> Config {
         var config = Config()
         var section: String?
-        var currentKeyboard: KeyboardTarget = .all
         let lines = content.components(separatedBy: "\n")
         var i = 0
 
@@ -41,11 +40,7 @@ enum ConfigParser {
                 let name = raw.lowercased()
                 switch name {
                 case "remap":
-                    section = "remap"; currentKeyboard = .all
-                case "remap:internal":
-                    section = "remap"; currentKeyboard = .internal
-                case "remap:external":
-                    section = "remap"; currentKeyboard = .external
+                    section = "remap"
                 case "snippet":
                     section = "snippet"
                 default:
@@ -80,7 +75,7 @@ enum ConfigParser {
                    !(combos.count == 2 && combos[0].keyCode == combos[1].keyCode) {
                     throw Error.invalidLine(i + 1, "only double-tap sequences supported")
                 }
-                config.remaps.append(RemapRule(input: input, output: output, keyboard: currentKeyboard))
+                config.remaps.append(RemapRule(input: input, output: output))
                 i += 1
 
             case "snippet":

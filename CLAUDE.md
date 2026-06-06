@@ -14,7 +14,7 @@ open Keys.app      # run (needs Accessibility permission)
 
 - `main.swift` — NSApplication entry point (.accessory policy, no dock icon)
 - `AppDelegate.swift` — menu bar UI, wires config manager to keyboard interceptor
-- `KeyboardInterceptor.swift` — CGEventTap callback, routes events through remap engine; partitions caps_lock rules between hidutil and CGEventTap; detects built-in keyboards via IOKit for per-keyboard rule filtering
+- `KeyboardInterceptor.swift` — CGEventTap callback, routes events through remap engine; partitions caps_lock rules between hidutil and CGEventTap
 - `RemapEngine.swift` — key remapping: single keys, modifier combos, modifier double-tap sequences
 - `HIDManager.swift` — runs `hidutil` for HID-level key remapping (caps lock); cleans up on quit
 - `InputSourceManager.swift` — cycles enabled keyboard input sources via Carbon TIS API
@@ -23,7 +23,7 @@ open Keys.app      # run (needs Accessibility permission)
 - `EventEmitter.swift` — emits synthetic CGEvents (tagged to avoid re-interception) and clipboard paste
 - `ConfigManager.swift` — loads/watches `~/.config/keys/keys.conf`, delegates updates/errors
 - `ConfigParser.swift` — config parser: `[section]` headers, colon-separated `key: value` for remaps/snippets, `"quoted"` for text containing colons or spanning multiple lines
-- `Config.swift` — data models: KeyCombo, RemapOutput, RemapRule, Config, KeyboardTarget
+- `Config.swift` — data models: KeyCombo, RemapOutput, RemapRule, Config
 - `KeyCodes.swift` — key name ↔ CGKeyCode mappings, CGKeyCode ↔ HID usage ID mappings, combo/sequence parsing
 
 ## Key design decisions
@@ -40,8 +40,7 @@ open Keys.app      # run (needs Accessibility permission)
 - On tap disable (timeout or user input), the tap is torn down immediately — never re-enabled in place, since re-enabling without permission freezes all input system-wide. The permission polling timer restarts the tap when safe
 - Requires both Accessibility and Input Monitoring permissions (macOS Sequoia needs Input Monitoring for keyDown events). Menu shows per-permission items; polls every 2s until both granted
 - Config file watched via DispatchSource; falls back to 2-second polling if file is deleted
-- Per-keyboard remaps: `[remap:internal]` / `[remap:external]` sections. Internal keyboard detected via IOKit `Built-In` property; keyboard type matched against CGEvent's `keyboardEventKeyboardType` field. Re-detected on each config reload
 
 ## Config format
 
-`~/.config/keys/keys.conf`. Two section types: `[remap]` and `[snippet]`. Remap sections support keyboard targeting: `[remap]` (all), `[remap:internal]` (built-in), `[remap:external]` (USB/Bluetooth). Remaps: `input: output`. Snippets: `alias: text` or plain text (no alias). Quote with `"..."` if text contains `:` or spans multiple lines. `""` escapes a literal `"`. See `example.keys.conf`.
+`~/.config/keys/keys.conf`. Two section types: `[remap]` and `[snippet]`. Remaps: `input: output`. Snippets: `alias: text` or plain text (no alias). Quote with `"..."` if text contains `:` or spans multiple lines. `""` escapes a literal `"`. See `example.keys.conf`.

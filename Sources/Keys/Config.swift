@@ -1,17 +1,5 @@
 import CoreGraphics
 
-enum KeyboardTarget: Hashable {
-    case all, `internal`, external
-
-    func matches(isInternal: Bool?) -> Bool {
-        switch self {
-        case .all: return true
-        case .internal: return isInternal == true
-        case .external: return isInternal == false
-        }
-    }
-}
-
 struct KeyCombo {
     let keyCode: UInt16
     let modifiers: CGEventFlags
@@ -39,7 +27,6 @@ struct RemapRule {
     }
     let input: Input
     let output: RemapOutput
-    var keyboard: KeyboardTarget = .all
 }
 
 struct Snippet {

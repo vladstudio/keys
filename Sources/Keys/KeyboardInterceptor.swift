@@ -1,18 +1,8 @@
 import AppKit
 import CoreGraphics
 import Foundation
-import IOKit.hid
 
 class KeyboardInterceptor {
-    private static let mediaKeySourceMaxAge: CFTimeInterval = 0.25
-    private static let mediaUsageToKeyType: [UInt32: Int32] = [
-        0x0007_003A: 3, 0x0007_003B: 2,  0x0007_003E: 22, 0x0007_003F: 21,
-        0x0007_0040: 18, 0x0007_0041: 16, 0x0007_0042: 17,
-        0x0007_0043: 7,  0x0007_0044: 1,  0x0007_0045: 0,
-        0x000C_006F: 2,  0x000C_0070: 3,  0x000C_00B5: 17, 0x000C_00B6: 18,
-        0x000C_00CD: 16, 0x000C_00E2: 7,  0x000C_00E9: 0,  0x000C_00EA: 1,
-    ]
-
     private let remapEngine = RemapEngine()
     var isEnabled = true
     var snippetPicker: SnippetPicker?
@@ -20,14 +10,10 @@ class KeyboardInterceptor {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var internalKeyboardTypes = Set<Int64>()
-    private var mediaKeyMonitor: IOHIDManager?
-    fileprivate var lastMediaKeySource: (keyType: Int32, isInternal: Bool, time: CFTimeInterval)?
     var keystrokeOverlay: KeystrokeOverlay?
     var onPermissionLost: (() -> Void)?
 
     func start() -> Bool {
-        startMediaKeyMonitoring()
         guard eventTap == nil else { return true }
         remapEngine.reset()
         let eventMask: CGEventMask =
@@ -77,11 +63,9 @@ class KeyboardInterceptor {
     var onWarning: ((String) -> Void)?
 
     func update(config: Config) {
-        refreshDeviceState()
-
         var hidMappings: [(src: UInt16, dst: UInt16)] = []
         var tapRules: [RemapRule] = []
-        var capsLockKeyboards = Set<KeyboardTarget>()
+        var capsLockSeen = false
 
         for rule in config.remaps {
             let isCapsLock: Bool
@@ -91,18 +75,15 @@ class KeyboardInterceptor {
                 isCapsLock = false
             }
 
-            if isCapsLock && capsLockKeyboards.contains(rule.keyboard) {
-                onWarning?("Multiple caps_lock rules for same keyboard; using first, ignoring rest")
+            if isCapsLock && capsLockSeen {
+                onWarning?("Multiple caps_lock rules; using first, ignoring rest")
                 continue
             }
-            if isCapsLock { capsLockKeyboards.insert(rule.keyboard) }
+            if isCapsLock { capsLockSeen = true }
 
-            // Caps lock → real key can use hidutil, but only for "all keyboards"
-            // (hidutil is system-wide; per-keyboard rules must go through CGEventTap)
             if isCapsLock,
                case .key(let combo) = rule.output,
-               combo.modifiers.isEmpty,
-               rule.keyboard == .all
+               combo.modifiers.isEmpty
             {
                 hidMappings.append((0x39, combo.keyCode))
             } else {
@@ -113,28 +94,6 @@ class KeyboardInterceptor {
         remapEngine.update(rules: tapRules)
         snippets = config.snippets
         HIDManager.apply(mappings: hidMappings)
-    }
-
-    // MARK: - Media key device tracking
-
-    /// Monitor consumer control HID devices to determine which keyboard generates media key events.
-    /// NX_SYSDEFINED events don't carry keyboard type, so we track it via IOHIDManager callbacks
-    /// which fire before the CGEventTap sees the corresponding NX_SYSDEFINED event.
-    private func startMediaKeyMonitoring() {
-        guard mediaKeyMonitor == nil else { return }
-        let manager = IOHIDManagerCreate(kCFAllocatorDefault, 0)
-        IOHIDManagerSetDeviceMatching(manager, [
-            "DeviceUsagePage": 0x0C, // Consumer
-            "DeviceUsage": 1,        // Consumer Control
-        ] as CFDictionary)
-        let ctx = Unmanaged.passUnretained(self).toOpaque()
-        IOHIDManagerRegisterDeviceMatchingCallback(manager, mediaKeyDeviceCallback, ctx)
-        IOHIDManagerRegisterDeviceRemovalCallback(manager, mediaKeyDeviceCallback, ctx)
-        IOHIDManagerRegisterInputValueCallback(manager, mediaKeyHIDCallback, ctx)
-        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
-        _ = IOHIDManagerOpen(manager, 0)
-        mediaKeyMonitor = manager
-        refreshDeviceState()
     }
 
     // MARK: - Event handling
@@ -153,9 +112,6 @@ class KeyboardInterceptor {
             return pass
         }
 
-        let kbType = event.getIntegerValueField(.keyboardEventKeyboardType)
-        let isInternal = !internalKeyboardTypes.isEmpty && internalKeyboardTypes.contains(kbType)
-
         // Media keys (NX_SYSDEFINED)
         if type.rawValue == 14 {
             guard isEnabled,
@@ -165,8 +121,7 @@ class KeyboardInterceptor {
             let data1 = nsEvent.data1
             let keyType = Int32((data1 >> 16) & 0xFFFF)
             let isDown = ((data1 >> 8) & 0xFF) == 0x0A
-            // NX_SYSDEFINED events don't carry keyboard type — use IOHIDManager-tracked device info
-            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown, isInternal: currentMediaKeyIsInternal(keyType: keyType)), pass: pass)
+            return dispatch(remapEngine.handleMediaKey(keyType: keyType, isDown: isDown), pass: pass)
         }
 
         if event.getIntegerValueField(.eventSourceUserData) == EventEmitter.marker {
@@ -184,54 +139,7 @@ class KeyboardInterceptor {
 
         guard isEnabled else { return pass }
 
-        return dispatch(remapEngine.handleEvent(event: event, type: type, isInternal: isInternal), pass: pass)
-    }
-
-    /// Query IOKit for keyboard types belonging to built-in keyboards.
-    private static func detectInternalKeyboardTypes() -> Set<Int64> {
-        var result = Set<Int64>()
-        let manager = IOHIDManagerCreate(kCFAllocatorDefault, 0)
-        defer { _ = IOHIDManagerClose(manager, 0) }
-
-        IOHIDManagerSetDeviceMatching(manager, [
-            "DeviceUsagePage": 1, // Generic Desktop
-            "DeviceUsage": 6,    // Keyboard
-        ] as CFDictionary)
-        _ = IOHIDManagerOpen(manager, 0)
-
-        guard let devices = IOHIDManagerCopyDevices(manager) else { return result }
-        for case let device as IOHIDDevice in (devices as NSSet) {
-            let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
-            guard (builtIn as? NSNumber)?.boolValue == true else { continue }
-            guard let type = IOHIDDeviceGetProperty(device, "KeyboardType" as CFString) as? NSNumber else { continue }
-            result.insert(type.int64Value)
-        }
-        return result
-    }
-
-    fileprivate func refreshDeviceState() {
-        internalKeyboardTypes = Self.detectInternalKeyboardTypes()
-        lastMediaKeySource = nil
-    }
-
-    fileprivate static func mediaKeyType(for element: IOHIDElement) -> Int32? {
-        let key = (IOHIDElementGetUsagePage(element) << 16) | IOHIDElementGetUsage(element)
-        return mediaUsageToKeyType[key]
-    }
-
-    fileprivate func noteMediaKeySource(from device: IOHIDDevice, keyType: Int32) {
-        let builtIn = IOHIDDeviceGetProperty(device, "Built-In" as CFString)
-        lastMediaKeySource = (keyType, (builtIn as? NSNumber)?.boolValue ?? false, CFAbsoluteTimeGetCurrent())
-    }
-
-    private func currentMediaKeyIsInternal(keyType: Int32) -> Bool? {
-        guard let source = lastMediaKeySource else { return nil }
-        guard source.keyType == keyType else { return nil }
-        guard CFAbsoluteTimeGetCurrent() - source.time <= Self.mediaKeySourceMaxAge else {
-            lastMediaKeySource = nil
-            return nil
-        }
-        return source.isInternal
+        return dispatch(remapEngine.handleEvent(event: event, type: type), pass: pass)
     }
 
     private func dispatch(_ result: RemapEngine.Result, pass: Unmanaged<CGEvent>) -> Unmanaged<CGEvent>? {
@@ -266,30 +174,6 @@ class KeyboardInterceptor {
             return pass
         }
     }
-}
-
-private func mediaKeyHIDCallback(
-    context: UnsafeMutableRawPointer?,
-    result: IOReturn,
-    sender: UnsafeMutableRawPointer?,
-    value: IOHIDValue
-) {
-    guard let context, let sender else { return }
-    let interceptor = Unmanaged<KeyboardInterceptor>.fromOpaque(context).takeUnretainedValue()
-    let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
-    guard let keyType = KeyboardInterceptor.mediaKeyType(for: IOHIDValueGetElement(value)) else { return }
-    interceptor.noteMediaKeySource(from: device, keyType: keyType)
-}
-
-private func mediaKeyDeviceCallback(
-    context: UnsafeMutableRawPointer?,
-    result: IOReturn,
-    sender: UnsafeMutableRawPointer?,
-    device: IOHIDDevice
-) {
-    guard let context else { return }
-    let interceptor = Unmanaged<KeyboardInterceptor>.fromOpaque(context).takeUnretainedValue()
-    interceptor.refreshDeviceState()
 }
 
 private func tapCallback(
