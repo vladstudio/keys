@@ -16,10 +16,6 @@ A macOS menu bar app that remaps keys and pastes text snippets.
 
 ## Install
 
-[Download Keys.zip](https://github.com/vladstudio/keys/releases/latest/download/Keys.zip), unzip, and move to Applications.
-
-Or via terminal:
-
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vladstudio/keys/main/install.sh)"
 ```
