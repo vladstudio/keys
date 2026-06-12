@@ -16,9 +16,7 @@ A small macOS menu bar app that lets you make keys do more — change what a key
 - **Keystroke overlay** — display each key you press on screen (handy for videos and demos)
 - **Plain text config** — everything lives in one text file, and changes apply automatically — no restart needed
 
-## Requirements
-
-- macOS 15 (Sequoia) or later
+Requires macOS 15 (Sequoia) or later.
 
 ## Install
 
@@ -30,7 +28,7 @@ A small macOS menu bar app that lets you make keys do more — change what a key
 ```
 
 3. The app will install to /Applications and open automatically
-4. On first launch, macOS will ask you to grant **Accessibility** and **Input Monitoring** access in System Settings — these are required for Keys to see your keystrokes
+4. On first launch, macOS will ask for **Accessibility** and **Input Monitoring** access in System Settings — these are required to see your keystrokes
 
 ## Configuration
 
