@@ -36,12 +36,20 @@ final class SnippetPicker: PickerPanel<Snippet> {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let commandOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
-        if event.type == .keyDown,
-           commandOnly,
-           event.charactersIgnoringModifiers == ",",
-           let onOpenConfig {
+        guard event.type == .keyDown, commandOnly else {
+            return super.performKeyEquivalent(with: event)
+        }
+        if event.charactersIgnoringModifiers == ",", let onOpenConfig {
             dismiss()
             onOpenConfig()
+            return true
+        }
+        if event.charactersIgnoringModifiers?.lowercased() == "c" {
+            let row = table.selectedRow
+            guard row >= 0, row < filtered.count else { return true }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(filtered[row].text, forType: .string)
+            dismiss()
             return true
         }
         return super.performKeyEquivalent(with: event)
