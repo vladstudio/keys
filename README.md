@@ -20,15 +20,9 @@ Requires macOS 15 (Sequoia) or later.
 
 ## Install
 
-1. Open **Terminal** (press ⌘Space, type "Terminal", press Enter)
-2. Copy and paste this command, then press Enter:
-
-```sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vladstudio/keys/main/install.sh)"
-```
-
-3. The app will install to /Applications and open automatically
-4. On first launch, macOS will ask for **Accessibility** and **Input Monitoring** access in System Settings — these are required to see your keystrokes
+1. Download [Keys.zip](https://github.com/vladstudio/keys/releases/latest/download/Keys.zip)
+2. Unzip and drag `Keys.app` to `/Applications`
+3. On first launch, macOS will ask for **Accessibility** and **Input Monitoring** access in System Settings — these are required to see your keystrokes
 
 ## Configuration
 
