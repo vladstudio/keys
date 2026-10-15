@@ -21,7 +21,7 @@ enum EventEmitter {
     /// Inject text into the active app. Delegates to MacAppKit.TextInjector, which
     /// uses per-char keycodes (Screen Sharing-safe) and falls back to a single
     /// clipboard paste when any char can't be resolved in the current layout.
-    /// 10ms between chars, so apps that do heavy work per keystroke keep up.
+    /// 5ms between chars, so apps that do heavy work per keystroke keep up.
     /// All emitted events are tagged with our marker so the local CGEventTap
     /// skips them. Called on main (DispatchQueue.main.async), hence assumeIsolated.
     static func pasteText(_ text: String) {
