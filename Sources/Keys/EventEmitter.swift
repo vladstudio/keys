@@ -21,10 +21,13 @@ enum EventEmitter {
     /// Inject text into the active app. Delegates to MacAppKit.TextInjector, which
     /// uses per-char keycodes (Screen Sharing-safe) and falls back to a single
     /// clipboard paste when any char can't be resolved in the current layout.
-    /// 5ms between chars, so apps that do heavy work per keystroke keep up.
+    /// 1ms between chars locally; 5ms when Screen Sharing is frontmost, since
+    /// fast bursts can arrive dropped or reordered on the remote.
     /// All emitted events are tagged with our marker so the local CGEventTap
     /// skips them. Called on main (DispatchQueue.main.async), hence assumeIsolated.
     static func pasteText(_ text: String) {
-        _ = MainActor.assumeIsolated { TextInjector.inject(text, marker: marker, charDelay: .milliseconds(5)) }
+        let remote = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.ScreenSharing"
+        let delay: Duration = .milliseconds(remote ? 5 : 1)
+        _ = MainActor.assumeIsolated { TextInjector.inject(text, marker: marker, charDelay: delay) }
     }
 }
